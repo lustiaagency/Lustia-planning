@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lustia Agency - Planning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .task-card {
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-cyan-50 via-white to-teal-50 min-h-screen">
+    <div id="app" class="p-4 md:p-6 max-w-7xl mx-auto"></div>
+
+    <script>
+        const App = {
+            models: JSON.parse(localStorage.getItem('lustia_models') || '[]'),
+            tasks: JSON.parse(localStorage.getItem('lustia_tasks') || '[]'),
+            showAddTask: false,
+            newModel: '',
+            newTask: {
+                model: '',
+                title: '',
+                deadline: '',
+                priority: 'moyenne',
+                status: 'en_attente'
+            }
+        };
+
+        const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        
+        const priorityColors = {
+            urgent: 'bg-red-100 border-red-500 text-red-900',
+            haute: 'bg-orange-100 border-orange-500 text-orange-900',
+            moyenne: 'bg-yellow-100 border-yellow-500 text-yellow-900',
+            basse: 'bg-emerald-100 border-emerald-500 text-emerald-900'
+        };
+
+        function saveData() {
+            localStorage.setItem('lustia_models', JSON.stringify(App.models));
+            localStorage.setItem('lustia_tasks', JSON.stringify(App.tasks));
+        }
+
+        function addModel() {
+            if (App.newModel.trim()) {
+                App.models.push({ id: Date.now(), name: App.newModel });
+                App.newModel = '';
+                saveData();
+                render();
+            }
+        }
+
+        function removeModel(id) {
+            App.models = App.models.filter(m => m.id !== id);
+            App.tasks = App.tasks.filter(t => t.model !== id);
+            saveData();
+            render();
+        }
+
+        function addTask() {
+            if (App.newTask.model && App.newTask.title && App.newTask.deadline) {
+                App.tasks.push({
+                    id: Date.now(),
+                    ...App.newTask
+                });
+                App.newTask = {
+                    model: '',
+                    title: '',
+                    deadline: '',
+                    priority: 'moyenne',
+                    status: 'en_attente'
+                };
+                App.showAddTask = false;
+                saveData();
+                render();
+            }
+        }
+
+        function updateTaskStatus(id, status) {
+            const task = App.tasks.find(t => t.id === id);
+            if (task) {
+                task.status = status;
+                saveData();
+                render();
+            }
+        }
+
+        function deleteTask(id) {
+            App.tasks = App.tasks.filter(t => t.id !== id);
+            saveData();
+            render();
+        }
+
+        function getTasksByDay(dayIndex) {
+            const today = new Date();
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+            
+            const targetDate = new Date(startOfWeek);
+            targetDate.setDate(startOfWeek.getDate() + dayIndex);
+            
+            return App.tasks.filter(task => {
+                const taskDate = new Date(task.deadline);
+                return taskDate.toDateString() === targetDate.toDateString();
+            });
+        }
+
+        function getWeekDates() {
+            const today = new Date();
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+            
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            
+            return {
+                start: startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
+                end: endOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+            };
+        }
+
+        function getModelName(modelId) {
+            const model = App.models.find(m => m.id === parseInt(modelId));
+            return model ? model.name : 'Modèle inconnu';
+        }
+
+        function getStats() {
+            const total = App.tasks.length;
+            const enRetard = App.tasks.filter(t => t.status === 'retard').length;
+            const termine = App.tasks.filter(t => t.status === 'termine').length;
+            const urgent = App.tasks.filter(t => t.priority === 'urgent' && t.status !== 'termine').length;
+            
+            return { total, enRetard, termine, urgent };
+        }
+
+        function render() {
+            const stats = getStats();
+            const weekDates = getWeekDates();
+
+            document.getElementById('app').innerHTML = `
+                <!-- En-tête avec logo -->
+                <div class="bg-white rounded-3xl shadow-xl p-6 mb-6 border-t-4 border-cyan-400">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-gradient-to-br from-cyan-400 to-teal-400 rounded-2xl p-3 shadow-lg">
+                                <svg class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                                    Lustia Agency
+                                </h1>
+                                <p class="text-gray-600 mt-1">Planning Hebdomadaire</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-gray-500 text-sm">Semaine du ${weekDates.start} au ${weekDates.end}</p>
+
+                    <!-- Statistiques -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                        <div class="bg-gradient-to-br from-cyan-50 to-cyan-100 rounded-xl p-4 border border-cyan-200">
+                            <div class="text-3xl font-bold text-cyan-600">${stats.total}</div>
+                            <div class="text-sm text-gray-600 mt-1">Tâches totales</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
+                            <div class="text-3xl font-bold text-red-600">${stats.enRetard}</div>
+                            <div class="text-sm text-gray-600 mt-1">En retard</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
+                            <div class="text-3xl font-bold text-orange-600">${stats.urgent}</div>
+                            <div class="text-sm text-gray-600 mt-1">Urgentes</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200">
+                            <div class="text-3xl font-bold text-emerald-600">${stats.termine}</div>
+                            <div class="text-sm text-gray-600 mt-1">Terminées</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gestion des modèles -->
+                <div class="bg-white rounded-3xl shadow-xl p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">👤 Modèles</h2>
+                    <div class="flex gap-2 mb-4">
+                        <input
+                            type="text"
+                            id="newModelInput"
+                            value="${App.newModel}"
+                            placeholder="Nom du modèle"
+                            class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all"
+                        />
+                        <button
+                            onclick="addModel()"
+                            class="bg-gradient-to-r from-cyan-500 to-teal-500 text-white px-6 py-3 rounded-xl hover:from-cyan-600 hover:to-teal-600 transition-all shadow-md font-semibold"
+                        >
+                            ➕ Ajouter
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        ${App.models.map(model => `
+                            <div class="bg-gradient-to-r from-cyan-100 to-teal-100 text-cyan-800 px-4 py-2 rounded-full flex items-center gap-2 border border-cyan-200 shadow-sm">
+                                <span class="font-medium">${model.name}</span>
+                                <button onclick="removeModel(${model.id})" class="hover:text-cyan-600 transition-colors">
+                                    🗑️
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Formulaire ajout tâche -->
+                ${App.showAddTask ? `
+                    <div class="bg-white rounded-3xl shadow-xl p-6 mb-6 border-l-4 border-cyan-400">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-4">✨ Nouvelle tâche</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <select id="taskModel" class="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-400">
+                                <option value="">Sélectionner un modèle</option>
+                                ${App.models.map(m => `<option value="${m.id}">${m.name}</option>`).join('')}
+                            </select>
+                            <input
+                                type="text"
+                                id="taskTitle"
+                                placeholder="Description de la tâche"
+                                class="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-400"
+                            />
+                            <input
+                                type="datetime-local"
+                                id="taskDeadline"
+                                class="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-400"
+                            />
+                            <select id="taskPriority" class="px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-cyan-400">
+                                <option value="basse">Priorité Basse</option>
+                                <option value="moyenne">Priorité Moyenne</option>
+                                <option value="haute">Priorité Haute</option>
+                                <option value="urgent">⚠️ URGENT</option>
+                            </select>
+                        </div>
+                        <div class="flex gap-2 mt-4">
+                            <button onclick="submitTask()" class="bg-gradient-to-r from-cyan-500 to-teal-500 text-white px-6 py-3 rounded-xl hover:from-cyan-600 hover:to-teal-600 transition-all shadow-md font-semibold">
+                                Créer la tâche
+                            </button>
+                            <button onclick="toggleAddTask()" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-xl hover:bg-gray-300 transition-all">
+                                Annuler
+                            </button>
+                        </div>
+                    </div>
+                ` : `
+                    <button
+                        onclick="toggleAddTask()"
+                        class="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-white py-4 rounded-3xl shadow-xl hover:from-cyan-600 hover:to-teal-600 mb-6 font-bold text-lg transition-all transform hover:scale-105"
+                    >
+                        ➕ Ajouter une tâche
+                    </button>
+                `}
+
+                <!-- Planning hebdomadaire -->
+                <div class="grid grid-cols-1 md:grid-cols-7 gap-4">
+                    ${daysOfWeek.map((day, index) => {
+                        const dayTasks = getTasksByDay(index);
+                        return `
+                            <div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                                <div class="bg-gradient-to-r from-cyan-500 to-teal-500 text-white p-4">
+                                    <h3 class="font-bold text-center text-lg">${day}</h3>
+                                </div>
+                                <div class="p-4 space-y-3 min-h-[200px]">
+                                    ${dayTasks.map(task => `
+                                        <div class="task-card border-l-4 rounded-lg p-3 ${priorityColors[task.priority]} ${task.status === 'termine' ? 'opacity-50' : ''}">
+                                            <div class="flex items-start justify-between mb-2">
+                                                <span class="font-bold text-sm">${getModelName(task.model)}</span>
+                                                <button onclick="deleteTask(${task.id})" class="text-gray-500 hover:text-red-600 transition-colors">
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                            <p class="text-sm mb-2 font-medium">${task.title}</p>
+                                            <div class="flex items-center gap-2 text-xs mb-2 text-gray-600">
+                                                🕐 ${new Date(task.deadline).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}
+                                            </div>
+                                            <select
+                                                onchange="updateTaskStatus(${task.id}, this.value)"
+                                                class="w-full text-xs p-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-cyan-400 font-medium"
+                                            >
+                                                <option value="en_attente" ${task.status === 'en_attente' ? 'selected' : ''}>⏳ En attente</option>
+                                                <option value="en_cours" ${task.status === 'en_cours' ? 'selected' : ''}>🔄 En cours</option>
+                                                <option value="termine" ${task.status === 'termine' ? 'selected' : ''}>✅ Terminé</option>
+                                                <option value="retard" ${task.status === 'retard' ? 'selected' : ''}>⚠️ En retard</option>
+                                            </select>
+                                        </div>
+                                    `).join('')}
+                                    ${dayTasks.length === 0 ? '<div class="text-center text-gray-400 text-sm mt-12">Aucune tâche</div>' : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <!-- Légende -->
+                <div class="bg-white rounded-3xl shadow-xl p-6 mt-6">
+                    <h3 class="font-bold text-gray-800 mb-4 text-xl">🎨 Légende des priorités</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="${priorityColors.urgent} p-4 rounded-xl text-center font-bold border-l-4 shadow-sm">
+                            ⚠️ URGENT
+                        </div>
+                        <div class="${priorityColors.haute} p-4 rounded-xl text-center font-bold border-l-4 shadow-sm">
+                            🔥 Haute
+                        </div>
+                        <div class="${priorityColors.moyenne} p-4 rounded-xl text-center font-bold border-l-4 shadow-sm">
+                            ⭐ Moyenne
+                        </div>
+                        <div class="${priorityColors.basse} p-4 rounded-xl text-center font-bold border-l-4 shadow-sm">
+                            ✨ Basse
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="text-center mt-8 text-gray-500 text-sm">
+                    <p class="font-medium">Lustia Agency - Planning Management System</p>
+                </div>
+            `;
+
+            // Event listeners
+            const newModelInput = document.getElementById('newModelInput');
+            if (newModelInput) {
+                newModelInput.addEventListener('input', (e) => {
+                    App.newModel = e.target.value;
+                });
+                newModelInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') addModel();
+                });
+            }
+        }
+
+        function toggleAddTask() {
+            App.showAddTask = !App.showAddTask;
+            render();
+        }
+
+        function submitTask() {
+            App.newTask.model = document.getElementById('taskModel').value;
+            App.newTask.title = document.getElementById('taskTitle').value;
+            App.newTask.deadline = document.getElementById('taskDeadline').value;
+            App.newTask.priority = document.getElementById('taskPriority').value;
+            addTask();
+        }
+
+        // Check for overdue tasks
+        setInterval(() => {
+            const today = new Date();
+            let updated = false;
+            App.tasks.forEach(task => {
+                const deadline = new Date(task.deadline);
+                if (deadline < today && task.status !== 'termine' && task.status !== 'retard') {
+                    task.status = 'retard';
+                    updated = true;
+                }
+            });
+            if (updated) {
+                saveData();
+                render();
+            }
+        }, 60000); // Check every minute
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
